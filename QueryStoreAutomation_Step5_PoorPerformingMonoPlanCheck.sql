@@ -59,7 +59,7 @@ BEGIN
 		--Regular, not Aborted or Exception
 		AND execution_type = 0 
 	GROUP BY plan_id
-	HAVING SUM(count_executions) >= 100
+	HAVING SUM(count_executions) >= 5
 
 	SELECT query_id
 		, query_store_plan.plan_id
@@ -75,40 +75,13 @@ BEGIN
 	INNER JOIN #PlanStats ON query_store_plan.plan_id = #PlanStats.plan_id
 
 	SELECT query_id
-		, MAX(CASE WHEN SlowestPlan = 1 THEN plan_id ELSE NULL END) AS SlowestPlan
-		, MAX(CASE WHEN FastestPlan = 1 THEN plan_id ELSE NULL END) AS FastestPlan
-		, MAX(CASE WHEN SlowestPlan = 1 THEN query_plan_hash ELSE NULL END) AS SlowestPlanHash
-		, MAX(CASE WHEN FastestPlan = 1 THEN query_plan_hash ELSE NULL END) AS FastestPlanHash
 		, MAX(CASE WHEN SlowestPlan = 1 THEN AverageDuration ELSE NULL END) AS SlowestPlanDuration
-		, MAX(CASE WHEN FastestPlan = 1 THEN AverageDuration ELSE NULL END) AS FastestPlanDuration
-		, (MAX(CASE WHEN SlowestPlan = 1 THEN AverageDuration ELSE NULL END) - MAX(CASE WHEN FastestPlan = 1 THEN AverageDuration ELSE NULL END))
-			/ 
-				(
-				--Begin Pooled SD
-				SQRT(
-						(
-							MAX(CASE WHEN SlowestPlan = 1 THEN SQUARE(PooledDurationSTDev) * (N-1) ELSE NULL END)
-							+ MAX(CASE WHEN FastestPlan = 1 THEN SQUARE(PooledDurationSTDev) * (N-1) ELSE NULL END)
-						)
-						/ (1.0 * (MAX(CASE WHEN SlowestPlan = 1 THEN N ELSE NULL END)
-							+ MAX(CASE WHEN FastestPlan = 1 THEN N ELSE NULL END)
-							- 2))
-					)
-				--End Pooled SD
-				* SQRT(
-						(1.0 / MAX(CASE WHEN SlowestPlan = 1 THEN N ELSE NULL END))
-						+ (1.0 / MAX(CASE WHEN FastestPlan = 1 THEN N ELSE NULL END))
-					  )
-				)
-		AS tStatistic
-
-		, (MAX(CASE WHEN SlowestPlan = 1 THEN N ELSE NULL END)) AS N
 	INTO #QueryStats
 	FROM #RankedPlanStats
 	--This is the divergence point between Step 1 and Step 5.
-	WHERE (FastestPlan = 1 AND SlowestPlan = 1)
 	GROUP BY query_id
 	HAVING SUM(CONVERT(int, is_forced_plan)) = 0
+		AND COUNT(*) = 1
 
 	--We don't validate that the [Step 1: High Variation Check] wouldn't have caught this - if it would have,
 	--it will the next time it runs so that's ok.
