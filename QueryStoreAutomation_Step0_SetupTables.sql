@@ -7,9 +7,13 @@ BEGIN
 END
 GO
 
+--Configurable settings you can customize
 DROP TABLE IF EXISTS QSAutomation.Configuration
+
+--A log of actions QSAutomation has taken
 DROP TABLE IF EXISTS QSAutomation.ActivityLog
-DROP TABLE IF EXISTS QSAutomation.QueryPlan
+
+--The list of queries currently being maintained by QSAutomation
 DROP TABLE IF EXISTS QSAutomation.Query
 GO
 
@@ -18,28 +22,17 @@ CREATE TABLE QSAutomation.Query (
 	, QueryHash binary(8)
 	, StatusID tinyint
 	, QueryCreationDatetime datetime2(2)
-
 	, QueryPlanID bigint NULL
 	, PlanHash binary(8) NULL
 	, PinDate datetime2(2) NULL
 )
 GO
 
-/*
-CREATE TABLE QSAutomation.QueryPlan (
-	QueryPlanID bigint NOT NULL CONSTRAINT PK_QueryPlan PRIMARY KEY
-	, QueryID bigint NOT NULL CONSTRAINT FK_QueryPlan_Query REFERENCES QSAutomation.Query(QueryID)
-	, PlanHash binary(8)
-	, PinDate datetime2(2)
-)
-GO
-*/
-
 CREATE TABLE QSAutomation.ActivityLog (
 	ActivityLogID bigint NOT NULL IDENTITY(1,1) CONSTRAINT PK_ActivityLog PRIMARY KEY
 	, ActivityDate datetime2(2) 
-	, QueryID bigint NOT NULL	--No FK, we might delete the records from the Query table, but need to keep it here for the log
-	, QueryPlanID bigint		--No FK, we might delete the records from the Query table, but need to keep it here for the log
+	, QueryID bigint NOT NULL	--No Foreign Key.  We might delete the records from the Query table, but need to keep it here for the log
+	, QueryPlanID bigint		--No Foreign Key.  We might delete the records from the Query table, but need to keep it here for the log
 	, ActionDetail nvarchar(max)
 )
 GO
@@ -54,7 +47,7 @@ CREATE TABLE QSAutomation.Configuration (
 )
 GO
 
---Set default values
+--Set default configuration values
 INSERT INTO QSAutomation.Configuration
 VALUES (1, 'Query Unlock Start Time', NULL)
 	 , (2, 'Last Query Store Reset', NULL)

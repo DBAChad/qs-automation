@@ -25,7 +25,7 @@ BEGIN
 	WHERE ConfigurationName = 'Email Log Level'
 
 	--If we already have a query under review, see if it's complete or we need to keep looking
-	--Integer division allows us to check for anything between 10 and 20 in one query.
+	--Integer division allows us to check for anything between 10 and 20 without using an OR clause.
 	IF EXISTS (SELECT * FROM QSAutomation.Query WHERE StatusID/10 = 1)
 	BEGIN
 		--If we've exceeded the unlock minutes, select the best plan.  Otherwise, do nothing.
