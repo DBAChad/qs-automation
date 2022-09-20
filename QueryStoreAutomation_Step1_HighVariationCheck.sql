@@ -134,7 +134,7 @@ BEGIN
 		WHERE tStatistic > @TStatisticThreshold
 			AND (SlowestPlanDuration - FastestPlanDuration) > @HighVariationDurationThreshold_MS
 			AND DF > @DFThreshold
-			AND (Query.QueryID IS NULL OR Query.StatusID = 20)
+			AND (Query.QueryID IS NULL OR (Query.StatusID NOT IN (0, 30) AND ISNULL(Query.QueryPlanID, -1) <> ISNULL(#QueryStats.FastestPlan, -1)))
 		ORDER BY SlowestPlanDuration - FastestPlanDuration DESC
 
 	OPEN HighVariationPlans  
@@ -150,12 +150,11 @@ BEGIN
 			, @InnerQueryID = @QueryID
 			, @InnerPlanID = @FastestPlanID
 
-		--There should only be a record in here if the query is Status "20" (Poor Performing Mono Query).
-		--DELETE FROM QSAutomation.QueryPlan WHERE QueryID = @QueryID
+		--Clean up any existing record
 		DELETE FROM QSAutomation.Query WHERE QueryID = @QueryID
 
-		INSERT INTO QSAutomation.Query (QueryID, QueryHash, StatusID, QueryCreationDatetime,    QueryPlanID, PlanHash, PinDate)
-		VALUES (@QueryID, @QueryHash, 1, SYSDATETIME(),   @FastestPlanID, @PlanHash, SYSDATETIME())
+		INSERT INTO QSAutomation.Query (QueryID, QueryHash, StatusID, QueryCreationDatetime, QueryPlanID, PlanHash, PinDate)
+		VALUES (@QueryID, @QueryHash, 1, SYSDATETIME(), @FastestPlanID, @PlanHash, SYSDATETIME())
 
 		--INSERT INTO QSAutomation.QueryPlan (QueryPlanID, QueryID, PlanHash, PinDate)
 		--VALUES (@FastestPlanID, @QueryID, @PlanHash, SYSDATETIME())

@@ -151,7 +151,7 @@ BEGIN
 	IF EXISTS (SELECT * FROM #UnresolvedMonoPlans)
 	BEGIN
 		UPDATE QSAutomation.Query 
-		SET StatusID = 0
+		SET StatusID = 40
 		FROM QSAutomation.Query 
 		INNER JOIN #UnresolvedMonoPlans ON Query.QueryID = #UnresolvedMonoPlans.QueryID
 	
