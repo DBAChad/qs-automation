@@ -73,7 +73,7 @@ BEGIN
 								WHEN 11 THEN 2
 								WHEN 12 THEN 3
 								WHEN 13 THEN 4
-								WHEN 14 THEN 0
+								WHEN 14 THEN 40
 								ELSE StatusID
 								END
 				, QueryPlanID = @PlanID
@@ -127,37 +127,49 @@ BEGIN
 				WHERE query_id = @QueryID
 					AND is_forced_plan = 1
 
-				SELECT @DynamicSQL = 'EXEC sp_query_store_unforce_plan @query_id = @InnerQueryID, @plan_id = @InnerPlanID'
-
-				EXEC sp_executeSQL @DynamicSQL
-					, N'@InnerQueryID bigint, @InnerPlanID bigint'
-					, @InnerQueryID = @QueryID
-					, @InnerPlanID = @PlanID
-		
-				UPDATE QSAutomation.Configuration
-				SET ConfigurationValue = SYSDATETIME()
-				WHERE ConfigurationName = 'Query Unlock Start Time'
-
-				INSERT INTO QSAutomation.ActivityLog (QueryID, QueryPlanID, ActionDetail)
-				VALUES (@QueryID, @PlanID, 'Plan unpinned temporarily to check for a better plan')
-
-				UPDATE QSAutomation.Query
-				SET StatusID = StatusID + 10
-				WHERE QueryID = @QueryID
-
-				IF (@EmailLogLevel IN ('Info', 'Debug'))
+				IF @PlanID IS NULL --Confirm there is a plan that is pinned. 
 				BEGIN
-					SELECT @SubjectText = 'Plan unpinned for testing on ' + @@Servername
-						, @BodyText = 'Plan was unpinned for a short test to see if a better one can be found' + char(10) + char(10) +
-										'Server: ' + @@Servername + char(10) +
-										'QueryID: ' + CONVERT(nvarchar(max), @QueryID)  + char(10) +
-										'PlanID: ' + CONVERT(nvarchar(max), @PlanID) 
+					--The plan is no longer pinned, so let's reset and let the natural automation take over
+					INSERT INTO QSAutomation.ActivityLog (QueryID, QueryPlanID, ActionDetail)
+					VALUES (@QueryID, NULL, 'Plan no longer pinned in query store.  Resetting record.')
+					
+					DELETE FROM QSAutomation.Query
+					WHERE QueryID = @QueryID
+				END
+				ELSE
+				BEGIN
+					SELECT @DynamicSQL = 'EXEC sp_query_store_unforce_plan @query_id = @InnerQueryID, @plan_id = @InnerPlanID'
 
-					EXEC msdb.dbo.sp_send_dbmail 
-						@profile_name = 'Default Profile'
-					, @recipients = @NotificationEmailAddress
-					, @body = @BodyText
-					, @subject = @SubjectText
+					EXEC sp_executeSQL @DynamicSQL
+						, N'@InnerQueryID bigint, @InnerPlanID bigint'
+						, @InnerQueryID = @QueryID
+						, @InnerPlanID = @PlanID
+
+					UPDATE QSAutomation.Configuration
+					SET ConfigurationValue = SYSDATETIME()
+					WHERE ConfigurationName = 'Query Unlock Start Time'
+
+					INSERT INTO QSAutomation.ActivityLog (QueryID, QueryPlanID, ActionDetail)
+					VALUES (@QueryID, @PlanID, 'Plan unpinned temporarily to check for a better plan')
+
+					UPDATE QSAutomation.Query
+					SET StatusID = StatusID + 10
+					WHERE QueryID = @QueryID
+
+					IF (@EmailLogLevel IN ('Info', 'Debug'))
+					BEGIN
+						SELECT @SubjectText = 'Plan unpinned for testing on ' + @@Servername
+							, @BodyText = 'Plan was unpinned for a short test to see if a better one can be found' + char(10) + char(10) +
+											'Server: ' + @@Servername + char(10) +
+											'QueryID: ' + CONVERT(nvarchar(max), @QueryID)  + char(10) +
+											'PlanID: ' + CONVERT(nvarchar(max), @PlanID) 
+
+						EXEC msdb.dbo.sp_send_dbmail 
+							@profile_name = 'Default Profile'
+						, @recipients = @NotificationEmailAddress
+						, @body = @BodyText
+						, @subject = @SubjectText
+					END
 				END
 			END
 		END

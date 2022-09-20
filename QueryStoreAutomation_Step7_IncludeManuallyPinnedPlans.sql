@@ -7,10 +7,15 @@ BEGIN
 	DECLARE @BodyText nvarchar(max)
 		, @JSONResults nvarchar(max)
 		, @NotificationEmailAddress varchar(max)
+		, @EmailLogLevel varchar(max)
 
 	SELECT @NotificationEmailAddress = ConfigurationValue
 	FROM QSAutomation.Configuration
 	WHERE ConfigurationName = 'Notification Email Address'
+
+	SELECT @EmailLogLevel = ConfigurationValue
+	FROM QSAutomation.Configuration
+	WHERE ConfigurationName = 'Email Log Level'
 
 	SELECT query_id
 		, plan_id
@@ -38,7 +43,7 @@ BEGIN
 
 		--Set the new records
 		INSERT INTO QSAutomation.Query (QueryID, QueryHash, StatusID, QueryCreationDatetime, QueryPlanID, PlanHash)
-		SELECT query_id, query_hash, 1, SYSDATETIME(), plan_id, query_plan_hash
+		SELECT query_id, query_hash, 0, SYSDATETIME(), plan_id, query_plan_hash
 		FROM #ManuallyPinnedQueries
 
 		SELECT @BodyText = 'Manually pinned queries added to the QSAutomation tables <BR>' +
@@ -48,26 +53,28 @@ BEGIN
 		SELECT query_id, plan_id, @BodyText
 		FROM #ManuallyPinnedQueries
 
+		IF (@EmailLogLevel IN ('Info', 'Debug'))
+		BEGIN
+			SELECT @BodyText = @BodyText + '<TABLE border=1 style=''font-family:"Courier New", Courier, monospace;''>' + 
+							'<TR><TH>Query ID</TH><TH>Query Hash</TH><TH>Plan ID</TH><TH>Query Plan Hash</TH></TR>' +
+							CONVERT(NVARCHAR(MAX), (
+								SELECT  
+									(SELECT query_id AS TD FOR XML PATH(''), TYPE)
+									, (SELECT CONVERT(VARCHAR(100), query_hash, 1) AS TD FOR XML PATH(''), TYPE)
+									, (SELECT plan_id AS TD FOR XML PATH(''), TYPE)
+									, (SELECT CONVERT(VARCHAR(100), query_plan_hash, 1) AS TD FOR XML PATH(''), TYPE)
+								FROM #ManuallyPinnedQueries
+								FOR XML PATH ('TR'), TYPE
+							))
+						+ '</TABLE>'
 
-		SELECT @BodyText = @BodyText + '<TABLE border=1 style=''font-family:"Courier New", Courier, monospace;''>' + 
-						'<TR><TH>Query ID</TH><TH>Query Hash</TH><TH>Plan ID</TH><TH>Query Plan Hash</TH></TR>' +
-						CONVERT(NVARCHAR(MAX), (
-							SELECT  
-								(SELECT query_id AS TD FOR XML PATH(''), TYPE)
-								, (SELECT CONVERT(VARCHAR(100), query_hash, 1) AS TD FOR XML PATH(''), TYPE)
-								, (SELECT plan_id AS TD FOR XML PATH(''), TYPE)
-								, (SELECT CONVERT(VARCHAR(100), query_plan_hash, 1) AS TD FOR XML PATH(''), TYPE)
-							FROM #ManuallyPinnedQueries
-							FOR XML PATH ('TR'), TYPE
-						))
-					+ '</TABLE>'
-
-		EXEC msdb.dbo.sp_send_dbmail 
-		@profile_name = 'Default Profile'
-		, @recipients = @NotificationEmailAddress
-		, @body = @Bodytext
-		, @subject = 'Manually pinned queries logged' 
-		, @body_format = 'HTML'
+			EXEC msdb.dbo.sp_send_dbmail 
+			@profile_name = 'Default Profile'
+			, @recipients = @NotificationEmailAddress
+			, @body = @Bodytext
+			, @subject = 'Manually pinned queries logged' 
+			, @body_format = 'HTML'
+		END
 
 	END
 END
